@@ -9,6 +9,7 @@ export const socketEvents = {
   connected: "session:connected",
   error: "session:error",
   controllerCount: "session:controller-count",
+  hostToken: "session:host-token",
 } as const;
 
 export interface ClientToServerEvents {
@@ -23,4 +24,5 @@ export interface ServerToClientEvents {
   [socketEvents.connected]: (payload: { clientId: string }) => void;
   [socketEvents.error]: (payload: { message: string }) => void;
   [socketEvents.controllerCount]: (count: number) => void;
+  [socketEvents.hostToken]: (payload: { token: string }) => void;
 }

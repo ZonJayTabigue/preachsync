@@ -21,6 +21,14 @@ Then open:
 | `http://localhost:4000/` | Presentation host (connect to this on the PC) |
 | `http://localhost:4000/controller` | Remote controller (open on phone) |
 
+On the host screen, use **Upload PowerPoint** to load a `.pptx` file. Only the
+host browser receives the upload token; the controller cannot upload.
+
+If Microsoft PowerPoint is installed on the host PC, PreachSync exports each
+slide as an image so the designed layout is shown. If PowerPoint is not
+available, it falls back to the largest picture embedded in the slide, layout,
+or master. Old `.ppt` files are not supported.
+
 ## Use from a phone on the same Wi-Fi
 
 1. Find the PC's LAN IP address:
@@ -99,3 +107,5 @@ Copy `apps/host/.env.example` to `apps/host/.env.local` to override defaults.
 |-----|--------|
 | Arrow Right, Page Down, Space | Next slide |
 | Arrow Left, Page Up | Previous slide |
+| F or F11 | Fullscreen presentation only |
+| Escape | Exit fullscreen |

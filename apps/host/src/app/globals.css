@@ -21,3 +21,10 @@ button,
 a {
   -webkit-tap-highlight-color: transparent;
 }
+
+.presentation-stage:fullscreen,
+.presentation-stage:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+}

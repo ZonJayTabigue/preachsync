@@ -95,7 +95,61 @@ describe("PreachSync socket server", () => {
     controllerA.emit(socketEvents.requestState);
     expect((await resynchronizedState).currentSlide.title).toBe("Welcome");
   });
+
+  it("sends the host upload token only to the host", async () => {
+    const host = makeClient("host");
+    const controller = makeClient("controller");
+    const hostToken = waitForHostToken(host);
+    const controllerToken = waitForHostToken(controller);
+
+    host.connect();
+    controller.connect();
+    await Promise.all([waitForConnection(host), waitForConnection(controller)]);
+
+    await expect(hostToken).resolves.toMatch(/^[a-f0-9]{64}$/);
+    await expect(controllerToken).rejects.toThrow(/timed out/i);
+  });
+
+  it("broadcasts a newly loaded presentation to every client", async () => {
+    const host = makeClient("host");
+    const controller = makeClient("controller");
+    host.connect();
+    controller.connect();
+    await Promise.all([waitForConnection(host), waitForConnection(controller)]);
+
+    const uploadedStates = [
+      waitForState(host, (state) => state.presentationId === "uploaded-deck"),
+      waitForState(
+        controller,
+        (state) => state.presentationId === "uploaded-deck",
+      ),
+    ];
+
+    server.loadPresentation({
+      id: "uploaded-deck",
+      title: "Sunday PPTX",
+      slides: [{ id: "u-1", title: "Opening", body: "Let us begin." }],
+    });
+
+    const [hostState, controllerState] = await Promise.all(uploadedStates);
+    expect(hostState.currentSlide.title).toBe("Opening");
+    expect(controllerState.currentSlide.title).toBe("Opening");
+    expect(hostState.presentationTitle).toBe("Sunday PPTX");
+  });
 });
+
+function waitForHostToken(client: TestClient): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error("Host token timed out.")),
+      400,
+    );
+    client.once(socketEvents.hostToken, ({ token }) => {
+      clearTimeout(timeout);
+      resolve(token);
+    });
+  });
+}
 
 function waitForConnection(client: TestClient): Promise<void> {
   if (client.connected) {

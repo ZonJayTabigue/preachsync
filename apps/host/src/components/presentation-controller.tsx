@@ -8,6 +8,7 @@ import {
 } from "@preachsync/shared";
 import { useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
+import { slideVisualSrc } from "@/lib/slide-visual";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 type PreachSyncSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -131,6 +132,8 @@ function CurrentSlideCard({
 }: {
   presentationState: PresentationState;
 }) {
+  const visualSrc = slideVisualSrc(presentationState.currentSlide);
+
   return (
     <article
       className="rounded-3xl border border-white/10 bg-white/[0.04] p-7 shadow-2xl shadow-black/30"
@@ -140,13 +143,32 @@ function CurrentSlideCard({
         Slide {presentationState.currentSlideIndex + 1} of{" "}
         {presentationState.totalSlides}
       </p>
-      <h2 className="mt-5 text-4xl leading-tight font-bold tracking-tight">
-        {presentationState.currentSlide.title}
-      </h2>
-      <p className="mt-5 line-clamp-5 text-lg leading-8 text-zinc-300">
-        {presentationState.currentSlide.body}
-      </p>
+      {visualSrc ? (
+        <SlidePreviewImage src={visualSrc} />
+      ) : (
+        <>
+          <h2 className="mt-5 text-4xl leading-tight font-bold tracking-tight">
+            {presentationState.currentSlide.title}
+          </h2>
+          {presentationState.currentSlide.body ? (
+            <p className="mt-5 line-clamp-5 whitespace-pre-line text-lg leading-8 text-zinc-300">
+              {presentationState.currentSlide.body}
+            </p>
+          ) : null}
+        </>
+      )}
     </article>
+  );
+}
+
+function SlidePreviewImage({ src }: { src: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className="mt-5 max-h-64 w-full rounded-xl object-contain"
+    />
   );
 }
 

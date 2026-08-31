@@ -1,9 +1,11 @@
+import { randomBytes } from "node:crypto";
 import { createServer, type Server as HttpServer } from "node:http";
 import {
   demoPresentation,
   socketEvents,
   type ClientRole,
   type ClientToServerEvents,
+  type Presentation,
   type ServerToClientEvents,
 } from "@preachsync/shared";
 import { Server } from "socket.io";
@@ -20,14 +22,25 @@ type PreachSyncIo = Server<
   SocketData
 >;
 
+export interface SocketServerControls {
+  io: PreachSyncIo;
+  /** Replace the active presentation and broadcast slide 1 to all clients. */
+  loadPresentation: (presentation: Presentation) => void;
+  /** Secret required by POST /api/presentation/upload. Sent only to host sockets. */
+  hostUploadToken: string;
+}
+
 /**
  * Attach Socket.IO and the presentation engine to an existing HTTP server.
  *
- * This is used by the custom server (server.ts) so that Socket.IO shares the
- * same port as the Next.js application.
+ * Used by the custom server (server.ts) so that Socket.IO shares the same port
+ * as the Next.js application.
  */
-export function attachSocketServer(httpServer: HttpServer): PreachSyncIo {
+export function attachSocketServer(
+  httpServer: HttpServer,
+): SocketServerControls {
   const presentationEngine = new PresentationEngine(demoPresentation);
+  const hostUploadToken = randomBytes(32).toString("hex");
 
   const io: PreachSyncIo = new Server(httpServer, {
     cors: {
@@ -56,6 +69,11 @@ export function attachSocketServer(httpServer: HttpServer): PreachSyncIo {
 
     socket.emit(socketEvents.connected, { clientId: socket.id });
     socket.emit(socketEvents.state, presentationEngine.getState());
+
+    if (socket.data.role === "host") {
+      socket.emit(socketEvents.hostToken, { token: hostUploadToken });
+    }
+
     broadcastControllerCount();
 
     socket.on(socketEvents.requestState, () => {
@@ -92,15 +110,17 @@ export function attachSocketServer(httpServer: HttpServer): PreachSyncIo {
     });
   });
 
-  return io;
+  function loadPresentation(presentation: Presentation): void {
+    presentationEngine.loadPresentation(presentation);
+    broadcastState();
+  }
+
+  return { io, loadPresentation, hostUploadToken };
 }
 
-// ─── Test helpers ────────────────────────────────────────────────────────────
-// The types below are only used by preachsync-server.test.ts so that tests can
-// spin up an isolated server without interfering with the main application.
+// ─── Test helpers ─────────────────────────────────────────────────────────────
 
-export interface PreachSyncServer {
-  io: PreachSyncIo;
+export interface PreachSyncServer extends SocketServerControls {
   httpServer: HttpServer;
   start: (port: number, hostname?: string) => Promise<number>;
   stop: () => Promise<void>;
@@ -112,10 +132,12 @@ export interface PreachSyncServer {
  */
 export function createPreachSyncServer(): PreachSyncServer {
   const httpServer = createServer();
-  const io = attachSocketServer(httpServer);
+  const { io, loadPresentation, hostUploadToken } = attachSocketServer(httpServer);
 
   return {
     io,
+    loadPresentation,
+    hostUploadToken,
     httpServer,
     start(port, hostname = "0.0.0.0") {
       return new Promise((resolve, reject) => {
