@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);

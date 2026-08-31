@@ -9,7 +9,7 @@
 import JSZip from "jszip";
 import { XMLParser } from "fast-xml-parser";
 import type { Slide } from "@preachsync/shared";
-import { renderSlidesWithPowerPoint } from "./pptx-powerpoint";
+import { renderPptxSlides } from "./pptx-render";
 
 interface TextRun {
   "a:t"?: string | number;
@@ -320,12 +320,12 @@ export async function parsePptx(buffer: Buffer): Promise<Slide[]> {
 }
 
 /**
- * Import a PPTX for display. Uses PowerPoint to render the designed slide
- * when available; otherwise uses the largest embedded image plus text.
+ * Import a PPTX for display. Uses PowerPoint or LibreOffice to render the
+ * designed slide when available; otherwise uses embedded pictures plus text.
  */
 export async function importPptx(buffer: Buffer): Promise<Slide[]> {
   const textSlides = await parsePptxFromZip(buffer);
-  const rendered = await renderSlidesWithPowerPoint(buffer);
+  const rendered = await renderPptxSlides(buffer);
 
   if (!rendered || rendered.length === 0) {
     return textSlides;
