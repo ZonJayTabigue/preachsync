@@ -21,16 +21,13 @@ Then open:
 | `http://localhost:4000/` | Presentation host (connect to this on the PC) |
 | `http://localhost:4000/controller` | Remote controller (open on phone) |
 
-On the host screen, use **Upload PowerPoint** to load a `.pptx` file. Only the
-host browser receives the upload token; the controller cannot upload.
+On the host screen, use **Upload PDF** to load a `.pdf` file. Only the host
+browser can upload. Export the deck from PowerPoint first:
 
-Slide images are rendered with:
+**File → Export → Create PDF/XPS** (or **Save As → PDF**).
 
-1. Microsoft PowerPoint on Windows (local host PC)
-2. LibreOffice + `pdftoppm` on Linux (Render Docker image)
-3. Embedded pictures from the `.pptx` file if neither is available
-
-Old `.ppt` files are not supported.
+Each PDF page becomes one slide image, so the designed layout is shown on
+Windows and on Render.
 
 ## Use from a phone on the same Wi-Fi
 
@@ -106,22 +103,17 @@ Copy `apps/host/.env.example` to `apps/host/.env.local` to override defaults.
 
 ## Deploy on Render
 
-A native Node service on Render cannot use Windows PowerPoint, so designed
-slides will not look the same as on your laptop. Use the Docker runtime so
-LibreOffice can export each slide as an image.
+PDF pages are rendered in Node, so designed slides work on Render without
+PowerPoint or LibreOffice.
 
 In the Render dashboard:
 
 1. New → Web Service
 2. Connect this repository
-3. Runtime: **Docker**
-4. Instance: **Starter** or larger (LibreOffice needs more than 512 MB)
-5. Leave `PORT` to Render. Set `HOST=0.0.0.0` if you add it yourself.
+3. Runtime: **Docker** or Node
+4. Leave `PORT` to Render. Set `HOST=0.0.0.0` if you add it yourself.
 
 Or apply `render.yaml` from the repo root.
-
-Do not use the Node runtime with `npm start` alone if you need designed
-PowerPoint slides. That path has no PowerPoint and no LibreOffice.
 
 ## Keyboard shortcuts (Host)
 

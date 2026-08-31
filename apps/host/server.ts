@@ -6,7 +6,7 @@
  *
  *   http://localhost:PORT/                        → Host presentation
  *   http://localhost:PORT/controller              → Controller
- *   http://localhost:PORT/api/presentation/upload → PPTX upload (POST, host only)
+ *   http://localhost:PORT/api/presentation/upload → PDF upload (POST, host only)
  *   ws://localhost:PORT                           → Socket.IO
  */
 
@@ -18,14 +18,14 @@ import {
   attachSocketServer,
   type SocketServerControls,
 } from "./server/preachsync-server";
-import { importPptx } from "./server/pptx-parser";
+import { importPdf } from "./server/pdf-parser";
 import { getSlideImage, preparePresentationForBroadcast } from "./server/slide-media";
 
-// ─── PPTX upload handler ──────────────────────────────────────────────────────
+// ─── PDF upload handler ───────────────────────────────────────────────────────
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
 
-function handlePptxUpload(
+function handlePdfUpload(
   req: IncomingMessage,
   res: ServerResponse,
   controls: SocketServerControls,
@@ -35,7 +35,7 @@ function handlePptxUpload(
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
-        error: "Only the presentation host can upload a PowerPoint file.",
+        error: "Only the presentation host can upload a PDF.",
       }),
     );
     return;
@@ -62,7 +62,7 @@ function handlePptxUpload(
   bb.on("file", (_field, fileStream, info) => {
     originalFilename = info.filename || originalFilename;
 
-    if (!originalFilename.toLowerCase().endsWith(".pptx")) {
+    if (!originalFilename.toLowerCase().endsWith(".pdf")) {
       rejectedFileType = true;
       fileStream.resume();
       return;
@@ -82,7 +82,7 @@ function handlePptxUpload(
       res.end(
         JSON.stringify({
           error:
-            "Only .pptx files are supported. Save the deck as PowerPoint (.pptx) and try again.",
+            "Only .pdf files are supported. Export the presentation as a PDF and try again.",
         }),
       );
       return;
@@ -102,14 +102,14 @@ function handlePptxUpload(
 
     try {
       const buffer = Buffer.concat(chunks);
-      const slides = await importPptx(buffer);
+      const slides = await importPdf(buffer);
 
       if (slides.length === 0) {
         res.writeHead(422, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
             error:
-              "No slides found in this file. Make sure it is a valid .pptx file.",
+              "No pages found in this file. Make sure it is a valid PDF.",
           }),
         );
         return;
@@ -118,7 +118,7 @@ function handlePptxUpload(
       controls.loadPresentation(
         preparePresentationForBroadcast({
           id: `upload-${Date.now()}`,
-          title: originalFilename.replace(/\.pptx$/i, ""),
+          title: originalFilename.replace(/\.pdf$/i, ""),
           slides,
         }),
       );
@@ -126,11 +126,11 @@ function handlePptxUpload(
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true, slideCount: slides.length }));
     } catch (err) {
-      console.error("[PreachSync] PPTX parse error:", err);
+      console.error("[PreachSync] PDF parse error:", err);
       res.writeHead(422, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: "Could not parse the file. Make sure it is a valid .pptx file.",
+          error: "Could not parse the file. Make sure it is a valid PDF.",
         }),
       );
     }
@@ -205,7 +205,7 @@ async function main(): Promise<void> {
         return;
       }
 
-      handlePptxUpload(req, res, socketControls.current);
+      handlePdfUpload(req, res, socketControls.current);
       return;
     }
 

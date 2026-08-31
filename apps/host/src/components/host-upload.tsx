@@ -16,14 +16,14 @@ export function HostUpload({ hostToken }: { hostToken: string | null }) {
       return;
     }
 
-    if (!file.name.toLowerCase().endsWith(".pptx")) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
       setStatus("error");
-      setStatusMessage("Only .pptx files can be uploaded.");
+      setStatusMessage("Only .pdf files can be uploaded.");
       return;
     }
 
     setStatus("uploading");
-    setStatusMessage("Reading PowerPoint…");
+    setStatusMessage("Reading PDF…");
 
     const formData = new FormData();
     formData.append("file", file);
@@ -63,7 +63,7 @@ export function HostUpload({ hostToken }: { hostToken: string | null }) {
       setStatus("success");
       setStatusMessage(`Loaded ${slideCount} slides from ${file.name}`);
     } catch (error: unknown) {
-      console.error("PowerPoint upload failed.", error);
+      console.error("PDF upload failed.", error);
       setStatus("error");
       setStatusMessage("Could not reach the PreachSync server.");
     }
@@ -74,7 +74,7 @@ export function HostUpload({ hostToken }: { hostToken: string | null }) {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        accept=".pdf,application/pdf"
         className="sr-only"
         onChange={(event) => {
           const file = event.target.files?.[0];
@@ -90,7 +90,7 @@ export function HostUpload({ hostToken }: { hostToken: string | null }) {
         disabled={!hostToken || status === "uploading"}
         onClick={() => fileInputRef.current?.click()}
       >
-        {status === "uploading" ? "Uploading…" : "Upload PowerPoint"}
+        {status === "uploading" ? "Uploading…" : "Upload PDF"}
       </button>
       {statusMessage ? (
         <p
@@ -102,7 +102,7 @@ export function HostUpload({ hostToken }: { hostToken: string | null }) {
           {statusMessage}
         </p>
       ) : (
-        <p className="text-xs text-zinc-500">.pptx only · host PC</p>
+        <p className="text-xs text-zinc-500">.pdf only · host PC</p>
       )}
     </div>
   );
