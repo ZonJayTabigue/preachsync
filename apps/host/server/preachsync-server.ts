@@ -43,10 +43,14 @@ export function attachSocketServer(
   const hostUploadToken = randomBytes(32).toString("hex");
 
   const io: PreachSyncIo = new Server(httpServer, {
+    path: "/socket.io",
     cors: {
       origin: "*",
       methods: ["GET", "POST"],
     },
+    transports: ["websocket", "polling"],
+    pingInterval: 25_000,
+    pingTimeout: 60_000,
   });
 
   function getControllerCount(): number {

@@ -166,6 +166,12 @@ async function main(): Promise<void> {
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url ?? "/", true);
 
+    // Socket.IO owns this path. If Next.js also handles it, the handshake
+    // hangs forever behind proxies such as Render.
+    if (parsedUrl.pathname?.startsWith("/socket.io")) {
+      return;
+    }
+
     // Intercept the upload endpoint before Next.js handles it.
     if (
       req.method === "GET" &&

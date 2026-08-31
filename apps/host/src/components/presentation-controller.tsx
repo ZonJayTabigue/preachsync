@@ -2,16 +2,16 @@
 
 import {
   socketEvents,
-  type ClientToServerEvents,
   type PresentationState,
-  type ServerToClientEvents,
 } from "@preachsync/shared";
 import { useEffect, useRef, useState } from "react";
-import { io, type Socket } from "socket.io-client";
+import {
+  connectPreachSyncSocket,
+  type PreachSyncSocket,
+} from "@/lib/preachsync-socket";
 import { slideVisualSrc } from "@/lib/slide-visual";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
-type PreachSyncSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 export function PresentationController() {
   const socketRef = useRef<PreachSyncSocket | null>(null);
@@ -24,10 +24,7 @@ export function PresentationController() {
     // Connect to the current browser origin — no hardcoded host or port.
     // When the phone opens http://192.168.1.11:4000/controller the socket
     // automatically connects to http://192.168.1.11:4000.
-    const socket: PreachSyncSocket = io({
-      auth: { role: "controller" },
-      reconnection: true,
-    });
+    const socket = connectPreachSyncSocket("controller");
     socketRef.current = socket;
 
     socket.on("connect", () => {

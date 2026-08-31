@@ -2,17 +2,17 @@
 
 import {
   socketEvents,
-  type ClientToServerEvents,
   type PresentationState,
-  type ServerToClientEvents,
 } from "@preachsync/shared";
 import { useEffect, useRef, useState } from "react";
-import { io, type Socket } from "socket.io-client";
 import { HostUpload } from "@/components/host-upload";
+import {
+  connectPreachSyncSocket,
+  type PreachSyncSocket,
+} from "@/lib/preachsync-socket";
 import { slideVisualSrc } from "@/lib/slide-visual";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
-type PreachSyncSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 export function HostPresentation() {
   const socketRef = useRef<PreachSyncSocket | null>(null);
@@ -26,10 +26,7 @@ export function HostPresentation() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    const socket: PreachSyncSocket = io({
-      auth: { role: "host" },
-      reconnection: true,
-    });
+    const socket = connectPreachSyncSocket("host");
     socketRef.current = socket;
 
     socket.on("connect", () => {
