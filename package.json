@@ -1,0 +1,25 @@
+{
+  "name": "preachsync",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@11.16.0",
+  "workspaces": [
+    "apps/host",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @preachsync/host",
+    "build": "npm run build --workspace @preachsync/host",
+    "start": "npm run start --workspace @preachsync/host",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "turbo": "latest",
+    "typescript": "latest"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
