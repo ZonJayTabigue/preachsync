@@ -15,12 +15,20 @@ export interface Presentation {
   slides: Slide[];
 }
 
+export interface SlideSummary {
+  id: string;
+  title: string;
+  imageUrl?: string;
+}
+
 export interface PresentationState {
   presentationId: string;
   presentationTitle: string;
   currentSlideIndex: number;
   totalSlides: number;
   currentSlide: Slide;
+  nextSlide: Slide | null;
+  slides: SlideSummary[];
 }
 
 export type ClientRole = "host" | "controller";

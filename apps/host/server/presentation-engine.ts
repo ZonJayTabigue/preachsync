@@ -44,12 +44,23 @@ export class PresentationEngine {
   }
 
   getState(): PresentationState {
+    const nextSlide =
+      this.currentSlideIndex + 1 < this.presentation.slides.length
+        ? this.presentation.slides[this.currentSlideIndex + 1]
+        : null;
+
     return {
       presentationId: this.presentation.id,
       presentationTitle: this.presentation.title,
       currentSlideIndex: this.currentSlideIndex,
       totalSlides: this.presentation.slides.length,
       currentSlide: this.presentation.slides[this.currentSlideIndex],
+      nextSlide,
+      slides: this.presentation.slides.map((slide) => ({
+        id: slide.id,
+        title: slide.title,
+        imageUrl: slide.imageUrl,
+      })),
     };
   }
 }

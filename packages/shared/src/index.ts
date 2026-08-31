@@ -9,4 +9,5 @@ export type {
   Presentation,
   PresentationState,
   Slide,
+  SlideSummary,
 } from "./types";

@@ -1,5 +1,6 @@
-import type { Slide } from "@preachsync/shared";
-
-export function slideVisualSrc(slide: Slide): string | undefined {
+export function slideVisualSrc(slide: {
+  imageUrl?: string;
+  imageDataUrl?: string;
+}): string | undefined {
   return slide.imageUrl ?? slide.imageDataUrl;
 }

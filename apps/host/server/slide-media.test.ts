@@ -19,7 +19,7 @@ describe("preparePresentationForBroadcast", () => {
 
     expect(presentation.slides[0].imageDataUrl).toBeUndefined();
     expect(presentation.slides[0].imageUrl).toBe(
-      "/api/presentation/slides/slide-1",
+      "/api/presentation/slides/slide-1?v=uploaded",
     );
     expect(getSlideImage("slide-1")?.mimeType).toBe("image/png");
     expect(getSlideImage("slide-1")?.bytes.length).toBeGreaterThan(0);

@@ -5,8 +5,11 @@ import { PresentationEngine } from "./presentation-engine";
 describe("PresentationEngine", () => {
   it("starts at slide zero", () => {
     const engine = new PresentationEngine(demoPresentation);
+    const presentationState = engine.getState();
 
-    expect(engine.getState().currentSlideIndex).toBe(0);
+    expect(presentationState.currentSlideIndex).toBe(0);
+    expect(presentationState.nextSlide?.title).toBe("John 3:16");
+    expect(presentationState.slides).toHaveLength(5);
   });
 
   it("moves to the next and previous slides", () => {
@@ -26,9 +29,11 @@ describe("PresentationEngine", () => {
 
     engine.goTo(demoPresentation.slides.length - 1);
     expect(engine.next()).toBe(false);
-    expect(engine.getState().currentSlideIndex).toBe(
+    const lastState = engine.getState();
+    expect(lastState.currentSlideIndex).toBe(
       demoPresentation.slides.length - 1,
     );
+    expect(lastState.nextSlide).toBeNull();
   });
 
   it("accepts valid goTo indexes", () => {

@@ -40,7 +40,7 @@ export function preparePresentationForBroadcast(
         id: slide.id,
         title: slide.title,
         body: slide.body,
-        imageUrl: `/api/presentation/slides/${encodeURIComponent(slide.id)}`,
+        imageUrl: `/api/presentation/slides/${encodeURIComponent(slide.id)}?v=${encodeURIComponent(presentation.id)}`,
       };
       if (slide.notes) {
         prepared.notes = slide.notes;
