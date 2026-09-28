@@ -29,9 +29,12 @@ describe("PreachSync socket server", () => {
     await server.stop();
   });
 
-  function makeClient(role: "host" | "controller"): TestClient {
+  function makeClient(
+    role: "host" | "controller",
+    roomId = "north",
+  ): TestClient {
     const client: TestClient = createClient(serverUrl, {
-      auth: { role },
+      auth: { role, roomId },
       autoConnect: false,
       transports: ["websocket"],
     });
@@ -125,7 +128,7 @@ describe("PreachSync socket server", () => {
       ),
     ];
 
-    server.loadPresentation({
+    server.loadPresentation("north", {
       id: "uploaded-deck",
       title: "Sunday PPTX",
       slides: [{ id: "u-1", title: "Opening", body: "Let us begin." }],
@@ -135,6 +138,89 @@ describe("PreachSync socket server", () => {
     expect(hostState.currentSlide.title).toBe("Opening");
     expect(controllerState.currentSlide.title).toBe("Opening");
     expect(hostState.presentationTitle).toBe("Sunday PPTX");
+  });
+
+  it("keeps two church rooms on separate slides and decks", async () => {
+    const northHost = makeClient("host", "north");
+    const northController = makeClient("controller", "north");
+    const southHost = makeClient("host", "south");
+    const southController = makeClient("controller", "south");
+
+    const northTokenPromise = waitForHostToken(northHost);
+    const southTokenPromise = waitForHostToken(southHost);
+    const northCount = waitForCount(northHost, 1);
+    const southCount = waitForCount(southHost, 1);
+
+    northHost.connect();
+    southHost.connect();
+    northController.connect();
+    southController.connect();
+    await Promise.all([
+      waitForConnection(northHost),
+      waitForConnection(northController),
+      waitForConnection(southHost),
+      waitForConnection(southController),
+      northCount,
+      southCount,
+    ]);
+
+    const [northToken, southToken] = await Promise.all([
+      northTokenPromise,
+      southTokenPromise,
+    ]);
+    expect(northToken).not.toBe(southToken);
+    expect(server.getHostUploadToken("north")).toBe(northToken);
+    expect(server.getHostUploadToken("south")).toBe(southToken);
+    expect(server.getHostUploadToken("north")).not.toBe(
+      server.getHostUploadToken("south"),
+    );
+
+    const northAdvanced = waitForState(
+      northHost,
+      (state) => state.currentSlideIndex === 1,
+    );
+    const northControllerAdvanced = waitForState(
+      northController,
+      (state) => state.currentSlideIndex === 1,
+    );
+    northController.emit(socketEvents.next);
+    expect((await northAdvanced).currentSlide.title).toBe("John 3:16");
+    await northControllerAdvanced;
+
+    const southUnchanged = waitForState(
+      southHost,
+      (state) => state.currentSlideIndex === 0,
+    );
+    const southControllerUnchanged = waitForState(
+      southController,
+      (state) => state.currentSlideIndex === 0,
+    );
+    southHost.emit(socketEvents.requestState);
+    southController.emit(socketEvents.requestState);
+    expect((await southUnchanged).currentSlide.title).toBe("Welcome");
+    expect((await southControllerUnchanged).currentSlide.title).toBe("Welcome");
+
+    const southUploaded = [
+      waitForState(southHost, (state) => state.presentationId === "south-deck"),
+      waitForState(
+        southController,
+        (state) => state.presentationId === "south-deck",
+      ),
+    ];
+    server.loadPresentation("south", {
+      id: "south-deck",
+      title: "South Sunday",
+      slides: [{ id: "s-1", title: "South opening", body: "Peace." }],
+    });
+    const [southHostState] = await Promise.all(southUploaded);
+    expect(southHostState.currentSlide.title).toBe("South opening");
+
+    const northStillDemo = waitForState(
+      northHost,
+      (state) => state.presentationId === "demo-presentation",
+    );
+    northHost.emit(socketEvents.requestState);
+    expect((await northStillDemo).currentSlide.title).toBe("John 3:16");
   });
 });
 

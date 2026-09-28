@@ -1,55 +1,104 @@
 import type { Presentation, Slide } from "@preachsync/shared";
+import type { RenderedPdfPage } from "./pdf-parser";
 
-interface StoredSlideImage {
+export interface StoredSlideImage {
   mimeType: string;
   bytes: Buffer;
 }
 
 const slideImages = new Map<string, StoredSlideImage>();
 
-function parseDataUrl(dataUrl: string): StoredSlideImage | undefined {
-  const match = /^data:([^;,]+);base64,(.+)$/.exec(dataUrl);
-  if (!match) {
-    return undefined;
+function imageKey(roomId: string, slideId: string): string {
+  return `${roomId}/${slideId}`;
+}
+
+export function clearSlideImages(roomId: string): void {
+  const prefix = `${roomId}/`;
+  for (const key of slideImages.keys()) {
+    if (key.startsWith(prefix)) {
+      slideImages.delete(key);
+    }
+  }
+}
+
+export function setSlideImage(
+  roomId: string,
+  slideId: string,
+  image: StoredSlideImage,
+): void {
+  slideImages.set(imageKey(roomId, slideId), image);
+}
+
+export function getSlideImage(
+  roomId: string,
+  slideId: string,
+): StoredSlideImage | undefined {
+  return slideImages.get(imageKey(roomId, slideId));
+}
+
+export function slideImageUrl(
+  roomId: string,
+  presentationId: string,
+  slideId: string,
+): string {
+  return `/api/presentation/slides/${encodeURIComponent(roomId)}/${encodeURIComponent(slideId)}?v=${encodeURIComponent(presentationId)}`;
+}
+
+function slideFromRenderedPage(
+  roomId: string,
+  presentationId: string,
+  page: RenderedPdfPage,
+): Slide {
+  setSlideImage(roomId, page.id, {
+    mimeType: page.mimeType,
+    bytes: page.imageBytes,
+  });
+
+  return {
+    id: page.id,
+    title: page.title,
+    body: page.body,
+    imageUrl: slideImageUrl(roomId, presentationId, page.id),
+  };
+}
+
+export function presentationFromFirstPdfPage(options: {
+  roomId: string;
+  presentationId: string;
+  title: string;
+  firstPage: RenderedPdfPage;
+  totalPages: number;
+}): Presentation {
+  clearSlideImages(options.roomId);
+
+  const slides: Slide[] = [
+    slideFromRenderedPage(options.roomId, options.presentationId, options.firstPage),
+  ];
+
+  for (let pageNumber = 2; pageNumber <= options.totalPages; pageNumber += 1) {
+    slides.push({
+      id: `slide-${pageNumber}`,
+      title: `Slide ${pageNumber}`,
+      body: "",
+    });
   }
 
   return {
-    mimeType: match[1],
-    bytes: Buffer.from(match[2], "base64"),
+    id: options.presentationId,
+    title: options.title,
+    slides,
   };
 }
 
-export function preparePresentationForBroadcast(
-  presentation: Presentation,
-): Presentation {
-  slideImages.clear();
-
+export function slidePatchFromRenderedPage(
+  roomId: string,
+  presentationId: string,
+  page: RenderedPdfPage,
+): Pick<Slide, "title" | "body" | "imageUrl"> {
+  const slide = slideFromRenderedPage(roomId, presentationId, page);
   return {
-    ...presentation,
-    slides: presentation.slides.map((slide) => {
-      if (!slide.imageDataUrl) {
-        return slide;
-      }
-
-      const stored = parseDataUrl(slide.imageDataUrl);
-      if (stored) {
-        slideImages.set(slide.id, stored);
-      }
-
-      const prepared: Slide = {
-        id: slide.id,
-        title: slide.title,
-        body: slide.body,
-        imageUrl: `/api/presentation/slides/${encodeURIComponent(slide.id)}?v=${encodeURIComponent(presentation.id)}`,
-      };
-      if (slide.notes) {
-        prepared.notes = slide.notes;
-      }
-      return prepared;
-    }),
+    title: slide.title,
+    body: slide.body,
+    imageUrl: slide.imageUrl,
   };
-}
-
-export function getSlideImage(slideId: string): StoredSlideImage | undefined {
-  return slideImages.get(slideId);
 }

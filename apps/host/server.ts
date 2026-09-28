@@ -12,26 +12,56 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { parse } from "node:url";
+import { normalizeRoomId } from "@preachsync/shared";
 import next from "next";
 import busboy from "busboy";
 import {
   attachSocketServer,
   type SocketServerControls,
 } from "./server/preachsync-server";
-import { importPdf } from "./server/pdf-parser";
-import { getSlideImage, preparePresentationForBroadcast } from "./server/slide-media";
+import {
+  openPdfDocument,
+  renderPdfPage,
+  renderPdfPagesInBackground,
+  type RenderedPdfPage,
+} from "./server/pdf-parser";
+import {
+  getSlideImage,
+  presentationFromFirstPdfPage,
+  slidePatchFromRenderedPage,
+} from "./server/slide-media";
 
 // ─── PDF upload handler ───────────────────────────────────────────────────────
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100 MB
+const pdfImportGeneration = new Map<string, number>();
+
+function nextPdfGeneration(roomId: string): number {
+  const generation = (pdfImportGeneration.get(roomId) ?? 0) + 1;
+  pdfImportGeneration.set(roomId, generation);
+  return generation;
+}
+
+function headerValue(
+  value: string | string[] | undefined,
+): string {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+function slideIndexFromPage(page: RenderedPdfPage): number {
+  return Number.parseInt(page.id.slice("slide-".length), 10) - 1;
+}
 
 function handlePdfUpload(
   req: IncomingMessage,
   res: ServerResponse,
   controls: SocketServerControls,
 ): void {
-  const providedToken = req.headers["x-preachsync-host-token"];
-  if (providedToken !== controls.hostUploadToken) {
+  const roomId = normalizeRoomId(
+    headerValue(req.headers["x-preachsync-room"]),
+  );
+  const providedToken = headerValue(req.headers["x-preachsync-host-token"]);
+  if (!roomId || providedToken !== controls.getHostUploadToken(roomId)) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
@@ -102,37 +132,81 @@ function handlePdfUpload(
 
     try {
       const buffer = Buffer.concat(chunks);
-      const slides = await importPdf(buffer);
+      const { pdf, pageCount } = await openPdfDocument(buffer);
+      let pdfOwnedByBackground = false;
 
-      if (slides.length === 0) {
+      try {
+        if (pageCount === 0) {
+          res.writeHead(422, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error:
+                "No pages found in this file. Make sure it is a valid PDF.",
+            }),
+          );
+          return;
+        }
+
+        const firstPage = await renderPdfPage(pdf, 1);
+        const presentationId = `upload-${Date.now()}`;
+        const generation = nextPdfGeneration(roomId);
+
+        controls.loadPresentation(
+          roomId,
+          presentationFromFirstPdfPage({
+            roomId,
+            presentationId,
+            title: originalFilename.replace(/\.pdf$/i, ""),
+            firstPage,
+            totalPages: pageCount,
+          }),
+        );
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true, slideCount: pageCount }));
+
+        if (pageCount === 1) {
+          return;
+        }
+
+        const remainingPages = Array.from(
+          { length: pageCount - 1 },
+          (_, index) => index + 2,
+        );
+
+        pdfOwnedByBackground = true;
+        void renderPdfPagesInBackground(
+          pdf,
+          remainingPages,
+          (page) => {
+            if (pdfImportGeneration.get(roomId) !== generation) {
+              return;
+            }
+            controls.updateSlide(
+              roomId,
+              slideIndexFromPage(page),
+              slidePatchFromRenderedPage(roomId, presentationId, page),
+            );
+          },
+          () => pdfImportGeneration.get(roomId) === generation,
+        ).catch((err: unknown) => {
+          console.error("[PreachSync] Background PDF render error:", err);
+        });
+      } finally {
+        if (!pdfOwnedByBackground) {
+          await pdf.destroy();
+        }
+      }
+    } catch (err) {
+      console.error("[PreachSync] PDF parse error:", err);
+      if (!res.headersSent) {
         res.writeHead(422, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
-            error:
-              "No pages found in this file. Make sure it is a valid PDF.",
+            error: "Could not parse the file. Make sure it is a valid PDF.",
           }),
         );
-        return;
       }
-
-      controls.loadPresentation(
-        preparePresentationForBroadcast({
-          id: `upload-${Date.now()}`,
-          title: originalFilename.replace(/\.pdf$/i, ""),
-          slides,
-        }),
-      );
-
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ success: true, slideCount: slides.length }));
-    } catch (err) {
-      console.error("[PreachSync] PDF parse error:", err);
-      res.writeHead(422, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          error: "Could not parse the file. Make sure it is a valid PDF.",
-        }),
-      );
     }
   });
 
@@ -177,10 +251,19 @@ async function main(): Promise<void> {
       req.method === "GET" &&
       parsedUrl.pathname?.startsWith("/api/presentation/slides/")
     ) {
-      const slideId = decodeURIComponent(
-        parsedUrl.pathname.slice("/api/presentation/slides/".length),
+      const slidePath = parsedUrl.pathname
+        .slice("/api/presentation/slides/".length)
+        .split("/");
+      if (slidePath.length !== 2) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Slide image not found." }));
+        return;
+      }
+
+      const image = getSlideImage(
+        decodeURIComponent(slidePath[0] ?? ""),
+        decodeURIComponent(slidePath[1] ?? ""),
       );
-      const image = getSlideImage(slideId);
       if (!image) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Slide image not found." }));

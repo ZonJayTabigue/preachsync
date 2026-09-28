@@ -74,6 +74,19 @@ describe("PresentationEngine", () => {
     expect(presentationState.currentSlide.title).toBe("Opening");
   });
 
+  it("patches a slide without resetting the current index", () => {
+    const engine = new PresentationEngine(demoPresentation);
+    engine.goTo(2);
+
+    expect(engine.updateSlide(4, { title: "Patched closer" })).toBe(true);
+
+    const presentationState = engine.getState();
+    expect(presentationState.currentSlideIndex).toBe(2);
+    expect(presentationState.slides[4].title).toBe("Patched closer");
+    expect(engine.updateSlide(-1, { title: "Nope" })).toBe(false);
+    expect(engine.updateSlide(99, { title: "Nope" })).toBe(false);
+  });
+
   it("rejects an empty replacement presentation", () => {
     const engine = new PresentationEngine(demoPresentation);
 

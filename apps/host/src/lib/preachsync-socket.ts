@@ -10,9 +10,12 @@ export type PreachSyncSocket = Socket<
   ClientToServerEvents
 >;
 
-export function connectPreachSyncSocket(role: ClientRole): PreachSyncSocket {
+export function connectPreachSyncSocket(
+  role: ClientRole,
+  roomId: string,
+): PreachSyncSocket {
   return io({
-    auth: { role },
+    auth: { role, roomId },
     path: "/socket.io",
     // Render's proxy is more reliable when the upgrade happens first.
     transports: ["websocket", "polling"],

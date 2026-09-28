@@ -6,15 +6,37 @@ import {
 } from "@preachsync/shared";
 import { useEffect, useRef, useState } from "react";
 import { HostUpload } from "@/components/host-upload";
+import { RoomJoin } from "@/components/room-join";
 import {
   connectPreachSyncSocket,
   type PreachSyncSocket,
 } from "@/lib/preachsync-socket";
+import { usePresentationRoom } from "@/lib/presentation-room";
 import { slideVisualSrc } from "@/lib/slide-visual";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
 export function HostPresentation() {
+  const room = usePresentationRoom();
+
+  if (!room.ready) {
+    return <main className="min-h-screen bg-[#07090d]" />;
+  }
+
+  if (!room.roomId) {
+    return (
+      <RoomJoin
+        title="Presentation host"
+        invalidRoom={room.invalidRoom}
+        onJoin={room.joinRoom}
+      />
+    );
+  }
+
+  return <HostPresentationSession roomId={room.roomId} />;
+}
+
+function HostPresentationSession({ roomId }: { roomId: string }) {
   const socketRef = useRef<PreachSyncSocket | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
   const [presentationState, setPresentationState] =
@@ -26,7 +48,7 @@ export function HostPresentation() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    const socket = connectPreachSyncSocket("host");
+    const socket = connectPreachSyncSocket("host", roomId);
     socketRef.current = socket;
 
     socket.on("connect", () => {
@@ -47,7 +69,7 @@ export function HostPresentation() {
       socketRef.current = null;
       socket.disconnect();
     };
-  }, []);
+  }, [roomId]);
 
   useEffect(() => {
     function syncFullscreenState(): void {
@@ -134,10 +156,17 @@ export function HostPresentation() {
             PreachSync
           </p>
           <p className="mt-1 text-sm text-zinc-400">
-            {presentationState?.presentationTitle ?? "Presentation host"}
+            {presentationState?.presentationTitle ?? "Presentation host"} ·{" "}
+            {roomId}
           </p>
         </div>
         <div className="flex items-center gap-5 text-sm text-zinc-300">
+          <a
+            className="rounded-lg border border-amber-400/40 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-400/10"
+            href={`/controller?room=${encodeURIComponent(roomId)}`}
+          >
+            /controller?room={roomId}
+          </a>
           <StatusIndicator active={isConnected} label={serverStatusLabel} />
           <span>
             {controllerCount}{" "}
@@ -173,7 +202,7 @@ export function HostPresentation() {
       </section>
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-5 py-4 text-xs text-zinc-500 sm:px-8">
-        <HostUpload hostToken={hostToken} />
+        <HostUpload hostToken={hostToken} roomId={roomId} />
         <span>Arrow keys · Page Up / Down · Space · F fullscreen</span>
       </footer>
     </main>

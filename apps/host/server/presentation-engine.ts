@@ -32,9 +32,28 @@ export class PresentationEngine {
   }
 
   /**
-   * Replace the active presentation and reset to slide zero.
-   * Broadcasts should be triggered by the caller after this call.
+   * Patch one slide in the current presentation.
+   * Does not reset the current slide index.
    */
+  updateSlide(
+    index: number,
+    patch: Partial<Pick<Presentation["slides"][number], "title" | "body" | "imageUrl">>,
+  ): boolean {
+    if (
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= this.presentation.slides.length
+    ) {
+      return false;
+    }
+
+    this.presentation.slides[index] = {
+      ...this.presentation.slides[index],
+      ...patch,
+    };
+    return true;
+  }
+
   loadPresentation(presentation: Presentation): void {
     if (presentation.slides.length === 0) {
       throw new Error("A presentation must contain at least one slide.");

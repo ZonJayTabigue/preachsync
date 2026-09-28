@@ -1,5 +1,6 @@
 export { demoPresentation } from "./demo-presentation";
 export { socketEvents } from "./events";
+export { normalizeRoomId } from "./room";
 export type {
   ClientToServerEvents,
   ServerToClientEvents,

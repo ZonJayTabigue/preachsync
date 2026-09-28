@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createServer, type Server as HttpServer } from "node:http";
 import {
   demoPresentation,
+  normalizeRoomId,
   socketEvents,
   type ClientRole,
   type ClientToServerEvents,
@@ -13,6 +14,12 @@ import { PresentationEngine } from "./presentation-engine";
 
 interface SocketData {
   role: ClientRole;
+  roomId: string;
+}
+
+interface RoomSession {
+  engine: PresentationEngine;
+  hostUploadToken: string;
 }
 
 type PreachSyncIo = Server<
@@ -24,10 +31,16 @@ type PreachSyncIo = Server<
 
 export interface SocketServerControls {
   io: PreachSyncIo;
-  /** Replace the active presentation and broadcast slide 1 to all clients. */
-  loadPresentation: (presentation: Presentation) => void;
-  /** Secret required by POST /api/presentation/upload. Sent only to host sockets. */
-  hostUploadToken: string;
+  /** Replace one room's presentation and broadcast slide 1 to that room. */
+  loadPresentation: (roomId: string, presentation: Presentation) => void;
+  /** Patch one slide in a room without resetting the current index, then broadcast. */
+  updateSlide: (
+    roomId: string,
+    index: number,
+    patch: Partial<Pick<Presentation["slides"][number], "title" | "body" | "imageUrl">>,
+  ) => void;
+  /** Secret required by POST /api/presentation/upload for this room. */
+  getHostUploadToken: (roomId: string) => string | undefined;
 }
 
 /**
@@ -39,8 +52,7 @@ export interface SocketServerControls {
 export function attachSocketServer(
   httpServer: HttpServer,
 ): SocketServerControls {
-  const presentationEngine = new PresentationEngine(demoPresentation);
-  const hostUploadToken = randomBytes(32).toString("hex");
+  const rooms = new Map<string, RoomSession>();
 
   const io: PreachSyncIo = new Server(httpServer, {
     path: "/socket.io",
@@ -53,46 +65,97 @@ export function attachSocketServer(
     pingTimeout: 60_000,
   });
 
-  function getControllerCount(): number {
-    return [...io.sockets.sockets.values()].filter(
-      (socket) => socket.data.role === "controller",
-    ).length;
-  }
-
-  function broadcastControllerCount(): void {
-    io.emit(socketEvents.controllerCount, getControllerCount());
-  }
-
-  function broadcastState(): void {
-    io.emit(socketEvents.state, presentationEngine.getState());
-  }
-
-  io.on("connection", (socket) => {
-    socket.data.role =
-      socket.handshake.auth.role === "controller" ? "controller" : "host";
-
-    socket.emit(socketEvents.connected, { clientId: socket.id });
-    socket.emit(socketEvents.state, presentationEngine.getState());
-
-    if (socket.data.role === "host") {
-      socket.emit(socketEvents.hostToken, { token: hostUploadToken });
+  function getOrCreateRoom(roomId: string): RoomSession {
+    const existing = rooms.get(roomId);
+    if (existing) {
+      return existing;
     }
 
-    broadcastControllerCount();
+    const room: RoomSession = {
+      engine: new PresentationEngine(demoPresentation),
+      hostUploadToken: randomBytes(32).toString("hex"),
+    };
+    rooms.set(roomId, room);
+    return room;
+  }
+
+  function getControllerCount(roomId: string): number {
+    const members = io.sockets.adapter.rooms.get(roomId);
+    if (!members) {
+      return 0;
+    }
+
+    let count = 0;
+    for (const socketId of members) {
+      const member = io.sockets.sockets.get(socketId);
+      if (member?.data.role === "controller") {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  function broadcastControllerCount(roomId: string): void {
+    io.to(roomId).emit(
+      socketEvents.controllerCount,
+      getControllerCount(roomId),
+    );
+  }
+
+  function broadcastState(roomId: string): void {
+    const room = rooms.get(roomId);
+    if (!room) {
+      return;
+    }
+
+    io.to(roomId).emit(socketEvents.state, room.engine.getState());
+  }
+
+  io.use((socket, next) => {
+    const roomId = normalizeRoomId(String(socket.handshake.auth.roomId ?? ""));
+    if (!roomId) {
+      next(new Error("A valid room code is required."));
+      return;
+    }
+
+    socket.data.roomId = roomId;
+    socket.data.role =
+      socket.handshake.auth.role === "controller" ? "controller" : "host";
+    next();
+  });
+
+  io.on("connection", (socket) => {
+    const { roomId } = socket.data;
+    const room = getOrCreateRoom(roomId);
+    socket.join(roomId);
+
+    socket.emit(socketEvents.connected, { clientId: socket.id });
+    socket.emit(socketEvents.state, room.engine.getState());
+
+    if (socket.data.role === "host") {
+      socket.emit(socketEvents.hostToken, { token: room.hostUploadToken });
+    }
+
+    broadcastControllerCount(roomId);
 
     socket.on(socketEvents.requestState, () => {
-      socket.emit(socketEvents.state, presentationEngine.getState());
+      const current = rooms.get(roomId);
+      if (current) {
+        socket.emit(socketEvents.state, current.engine.getState());
+      }
     });
 
     socket.on(socketEvents.next, () => {
-      if (presentationEngine.next()) {
-        broadcastState();
+      const current = rooms.get(roomId);
+      if (current?.engine.next()) {
+        broadcastState(roomId);
       }
     });
 
     socket.on(socketEvents.previous, () => {
-      if (presentationEngine.previous()) {
-        broadcastState();
+      const current = rooms.get(roomId);
+      if (current?.engine.previous()) {
+        broadcastState(roomId);
       }
     });
 
@@ -104,22 +167,54 @@ export function attachSocketServer(
         return;
       }
 
-      if (presentationEngine.goTo(index)) {
-        broadcastState();
+      const current = rooms.get(roomId);
+      if (current?.engine.goTo(index)) {
+        broadcastState(roomId);
       }
     });
 
     socket.on("disconnect", () => {
-      broadcastControllerCount();
+      broadcastControllerCount(roomId);
     });
   });
 
-  function loadPresentation(presentation: Presentation): void {
-    presentationEngine.loadPresentation(presentation);
-    broadcastState();
+  function loadPresentation(roomId: string, presentation: Presentation): void {
+    const normalized = normalizeRoomId(roomId);
+    if (!normalized) {
+      return;
+    }
+
+    getOrCreateRoom(normalized).engine.loadPresentation(presentation);
+    broadcastState(normalized);
   }
 
-  return { io, loadPresentation, hostUploadToken };
+  function updateSlide(
+    roomId: string,
+    index: number,
+    patch: Partial<
+      Pick<Presentation["slides"][number], "title" | "body" | "imageUrl">
+    >,
+  ): void {
+    const normalized = normalizeRoomId(roomId);
+    if (!normalized) {
+      return;
+    }
+
+    if (getOrCreateRoom(normalized).engine.updateSlide(index, patch)) {
+      broadcastState(normalized);
+    }
+  }
+
+  function getHostUploadToken(roomId: string): string | undefined {
+    const normalized = normalizeRoomId(roomId);
+    if (!normalized) {
+      return undefined;
+    }
+
+    return rooms.get(normalized)?.hostUploadToken;
+  }
+
+  return { io, loadPresentation, updateSlide, getHostUploadToken };
 }
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -136,12 +231,14 @@ export interface PreachSyncServer extends SocketServerControls {
  */
 export function createPreachSyncServer(): PreachSyncServer {
   const httpServer = createServer();
-  const { io, loadPresentation, hostUploadToken } = attachSocketServer(httpServer);
+  const { io, loadPresentation, updateSlide, getHostUploadToken } =
+    attachSocketServer(httpServer);
 
   return {
     io,
     loadPresentation,
-    hostUploadToken,
+    updateSlide,
+    getHostUploadToken,
     httpServer,
     start(port, hostname = "0.0.0.0") {
       return new Promise((resolve, reject) => {

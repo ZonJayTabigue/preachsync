@@ -4,7 +4,13 @@ import { useRef, useState } from "react";
 
 type UploadStatus = "idle" | "uploading" | "success" | "error";
 
-export function HostUpload({ hostToken }: { hostToken: string | null }) {
+export function HostUpload({
+  hostToken,
+  roomId,
+}: {
+  hostToken: string | null;
+  roomId: string;
+}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [statusMessage, setStatusMessage] = useState("");
@@ -23,7 +29,7 @@ export function HostUpload({ hostToken }: { hostToken: string | null }) {
     }
 
     setStatus("uploading");
-    setStatusMessage("Reading PDF…");
+    setStatusMessage("Rendering PDF…");
 
     const formData = new FormData();
     formData.append("file", file);
@@ -33,6 +39,7 @@ export function HostUpload({ hostToken }: { hostToken: string | null }) {
         method: "POST",
         headers: {
           "x-preachsync-host-token": hostToken,
+          "x-preachsync-room": roomId,
         },
         body: formData,
       });
@@ -90,7 +97,7 @@ export function HostUpload({ hostToken }: { hostToken: string | null }) {
         disabled={!hostToken || status === "uploading"}
         onClick={() => fileInputRef.current?.click()}
       >
-        {status === "uploading" ? "Uploading…" : "Upload PDF"}
+        {status === "uploading" ? "Rendering PDF…" : "Upload PDF"}
       </button>
       {statusMessage ? (
         <p
