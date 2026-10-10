@@ -132,9 +132,7 @@ export function attachSocketServer(
     socket.emit(socketEvents.connected, { clientId: socket.id });
     socket.emit(socketEvents.state, room.engine.getState());
 
-    if (socket.data.role === "host") {
-      socket.emit(socketEvents.hostToken, { token: room.hostUploadToken });
-    }
+    socket.emit(socketEvents.hostToken, { token: room.hostUploadToken });
 
     broadcastControllerCount(roomId);
 

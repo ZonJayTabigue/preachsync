@@ -12,11 +12,13 @@ import {
   type PreachSyncSocket,
 } from "@/lib/preachsync-socket";
 import { usePresentationRoom } from "@/lib/presentation-room";
+import { useScreenWakeLock } from "@/lib/use-screen-wake-lock";
 import { slideVisualSrc } from "@/lib/slide-visual";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
 export function HostPresentation() {
+  useScreenWakeLock();
   const room = usePresentationRoom();
 
   if (!room.ready) {

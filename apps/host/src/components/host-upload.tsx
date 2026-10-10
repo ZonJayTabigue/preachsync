@@ -18,7 +18,7 @@ export function HostUpload({
   async function uploadFile(file: File): Promise<void> {
     if (!hostToken) {
       setStatus("error");
-      setStatusMessage("Connect as the host before uploading.");
+      setStatusMessage("Connect before uploading.");
       return;
     }
 
@@ -109,7 +109,7 @@ export function HostUpload({
           {statusMessage}
         </p>
       ) : (
-        <p className="text-xs text-zinc-500">.pdf only · host PC</p>
+        <p className="text-xs text-zinc-500">.pdf only</p>
       )}
     </div>
   );

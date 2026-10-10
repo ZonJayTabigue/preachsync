@@ -7,17 +7,20 @@ import {
   type SlideSummary,
 } from "@preachsync/shared";
 import { useEffect, useRef, useState } from "react";
+import { HostUpload } from "@/components/host-upload";
 import { RoomJoin } from "@/components/room-join";
 import {
   connectPreachSyncSocket,
   type PreachSyncSocket,
 } from "@/lib/preachsync-socket";
 import { usePresentationRoom } from "@/lib/presentation-room";
+import { useScreenWakeLock } from "@/lib/use-screen-wake-lock";
 import { slideVisualSrc } from "@/lib/slide-visual";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 
 export function PresentationController() {
+  useScreenWakeLock();
   const room = usePresentationRoom();
 
   if (!room.ready) {
@@ -43,6 +46,7 @@ function PresentationControllerSession({ roomId }: { roomId: string }) {
     useState<ConnectionState>("connecting");
   const [presentationState, setPresentationState] =
     useState<PresentationState | null>(null);
+  const [hostToken, setHostToken] = useState<string | null>(null);
 
   useEffect(() => {
     const socket = connectPreachSyncSocket("controller", roomId);
@@ -52,9 +56,13 @@ function PresentationControllerSession({ roomId }: { roomId: string }) {
       setConnectionState("connected");
       socket.emit(socketEvents.requestState);
     });
-    socket.on("disconnect", () => setConnectionState("disconnected"));
+    socket.on("disconnect", () => {
+      setConnectionState("disconnected");
+      setHostToken(null);
+    });
     socket.on("connect_error", () => setConnectionState("disconnected"));
     socket.on(socketEvents.state, setPresentationState);
+    socket.on(socketEvents.hostToken, ({ token }) => setHostToken(token));
     socket.on(socketEvents.error, ({ message }) => console.error(message));
 
     return () => {
@@ -111,7 +119,11 @@ function PresentationControllerSession({ roomId }: { roomId: string }) {
 
   return (
     <main className="flex h-dvh w-full flex-col overflow-hidden bg-[#090b10] px-4 py-2 text-white sm:px-6 sm:py-3">
-      <ControllerHeader connectionState={connectionState} roomId={roomId} />
+      <ControllerHeader
+        connectionState={connectionState}
+        roomId={roomId}
+        hostToken={hostToken}
+      />
 
       <section className="flex min-h-0 flex-1 flex-col gap-2 py-2 sm:gap-3">
         {presentationState ? (
@@ -161,9 +173,11 @@ function PresentationControllerSession({ roomId }: { roomId: string }) {
 function ControllerHeader({
   connectionState,
   roomId,
+  hostToken,
 }: {
   connectionState: ConnectionState;
   roomId: string;
+  hostToken: string | null;
 }) {
   const labels: Record<ConnectionState, string> = {
     connecting: "Connecting",
@@ -181,19 +195,22 @@ function ControllerHeader({
           Remote controller · {roomId}
         </h1>
       </div>
-      <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-300">
-        <span
-          className={`size-2 rounded-full ${
-            connectionState === "connected"
-              ? "bg-emerald-400"
-              : connectionState === "connecting"
-                ? "bg-amber-400"
-                : "bg-red-400"
-          }`}
-          aria-hidden="true"
-        />
-        {labels[connectionState]}
-      </span>
+      <div className="flex shrink-0 items-center gap-3">
+        <HostUpload hostToken={hostToken} roomId={roomId} />
+        <span className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-zinc-300">
+          <span
+            className={`size-2 rounded-full ${
+              connectionState === "connected"
+                ? "bg-emerald-400"
+                : connectionState === "connecting"
+                  ? "bg-amber-400"
+                  : "bg-red-400"
+            }`}
+            aria-hidden="true"
+          />
+          {labels[connectionState]}
+        </span>
+      </div>
     </header>
   );
 }

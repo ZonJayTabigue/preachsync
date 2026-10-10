@@ -99,7 +99,7 @@ describe("PreachSync socket server", () => {
     expect((await resynchronizedState).currentSlide.title).toBe("Welcome");
   });
 
-  it("sends the host upload token only to the host", async () => {
+  it("sends the same room upload token to the host and the controller", async () => {
     const host = makeClient("host");
     const controller = makeClient("controller");
     const hostToken = waitForHostToken(host);
@@ -110,7 +110,7 @@ describe("PreachSync socket server", () => {
     await Promise.all([waitForConnection(host), waitForConnection(controller)]);
 
     await expect(hostToken).resolves.toMatch(/^[a-f0-9]{64}$/);
-    await expect(controllerToken).rejects.toThrow(/timed out/i);
+    await expect(controllerToken).resolves.toBe(await hostToken);
   });
 
   it("broadcasts a newly loaded presentation to every client", async () => {
